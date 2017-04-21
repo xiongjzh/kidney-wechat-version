@@ -16,14 +16,8 @@ angular.module('kidney',[
     'ionic-datepicker'
 ])
 
-.run(['$ionicPlatform', '$state', 'Storage', 'JM','$rootScope', function($ionicPlatform, $state, Storage, JM,$rootScope) {
+.run(['$ionicPlatform', '$state', 'Storage', 'JM','$rootScope','CONFIG','Communication', function($ionicPlatform, $state, Storage, JM,$rootScope,CONFIG,Communication) {
     $ionicPlatform.ready(function() {
-        $rootScope.goConclusion =function(){
-            alert('aaa');
-        // if(params.type=='2') location.hash = "#conclusion";
-        // else $state.go('tab.group-conclusion',{teamId:params.teamId,groupId:params.groupId,type:params.type});
-    }
-
         //是否登陆
         var isSignIN = Storage.get("isSignIN");
         if (isSignIN == 'YES') {
@@ -32,6 +26,7 @@ angular.module('kidney',[
 
         //用户ID
         var userid = '';
+        //记录jmessage当前会话
         $rootScope.conversation = {
             type: null,
             id: ''
@@ -55,37 +50,154 @@ angular.module('kidney',[
         if (window.JMessage) {
             // window.Jmessage.init();
             JM.init();
-
+            document.addEventListener('jmessage.onUserLogout',function(data){
+              console.error(Storage.get(UID) +' log out');
+              alert('jmessage user log out: '+Storage.get(UID));
+            })
+            //打开通知栏消息，属于jmessage
             document.addEventListener('jmessage.onOpenMessage', function(msg) {
                 console.info('[jmessage.onOpenMessage]:');
                 console.log(msg);
-                $state.go('tab.chat-detail', { chatId: msg.fromName, fromUser: msg.fromUser });
+                if(msg.targetType=='group'){
+                    window.JMessage.getGroupInfo(msg.targetID,
+                        function(response){
+                            //'0':团队交流  '1': 未结束病历  '2':已结束病历
+                            var res=JSON.stringify(response);
+                            if(res.groupDescription=="consultation_open"){
+                                $state.go('tab.group-chat', { type:'1',groupId: msg.targetID,teamId:msg.content.stringExtras.teamId});
+                            }else if(res.groupDescription=="consultation_close"){
+                                $state.go('tab.group-chat', { type:'2',groupId: msg.targetID,teamId:msg.content.stringExtras.teamId});
+                            }else{
+                                $state.go('tab.group-chat', { type:'0',groupId: msg.targetID,teamId:msg.content.stringExtras.teamId});
+                            }
+                            console.log(res);
+                        },function(err){
+                            console.log(err);
+                        })
+                }else{
+                    // window.JMessage.getUserInfo(msg.fromID,msg.fromAppkey,
+                    //     function(response){
+                    //         console.log(response);
+                    //     },function(err){
+                    //         console.log(err);
+                    //     })
+                    if(msg.fromAppkey==CONFIG.appKey){
+                        $state.go('tab.detail', { type:'2',chatId: msg.targetID});
+                    }else{
+                        $state.go('tab.detail', { type:'1',chatId: msg.targetID});
+                    }
+                }
             }, false);
+            //打开通知栏Notification,属于jpush
+            document.addEventListener("jpush.openNotification", function (msg) {
+                console.info('[jpush.openNotification]:');
+                console.log(msg);
+                // var alertContent
+                if(device.platform == "Android") {
+                    if(msg.extras.targetType=='group'){
+                        //转发团队
+                        var content = JSON.stringify(msg.extras.content);
+                            groupId = content.contentStringMap.consultationId;
+                            teamId = content.contentStringMap.targetId;
+                        if(groupId!=teamId){
+                            $state.go('tab.group-chat', { type:'1',groupId: groupId,teamId:teamId});
+                        }else{
+                            $state.go('tab.group-chat', { type:'0',groupId: groupId,teamId:teamId});
+                        }
+                    }else{
+                        //转发医生
+                        if(msg.extras.fromAppkey==CONFIG.appKey){
+                            $state.go('tab.detail', { type:'2',chatId: msg.extras.fromName});
+                        }else{
+                            $state.go('tab.detail', { type:'1',chatId: msg.extras.fromName});
+                        }
+                    }
+                } else {
+                }
+            }, false)
+
+            //广播'receiveMessage'
             document.addEventListener('jmessage.onReceiveMessage', function(msg) {
                 console.info('[jmessage.onReceiveMessage]:');
                 console.log(msg);
                 $rootScope.$broadcast('receiveMessage', msg);
                 if (device.platform == "Android") {
-                    // message = window.JMessage.message;
-                    // console.log(JSON.stringify(message));
                 }
             }, false);
+
+            //显示通知栏消息
+            // custom消息内容
+            // 患者发送咨询：{
+            //     counsel:data.results,
+            //     type:'card',
+            //     patientId:patientId,
+            //     doctorId:DoctorId,
+            //     //转发信息
+            //     fromId:
+            //     targetId:
+            // }
+            // 咨询转发医生：{
+            //     counsel:data.results,
+            //     type:'card',
+            //     patientId:patientId,
+            //     doctorId:DoctorId,
+            //     //转发信息
+            //     targetId:DoctorId,
+            //     fromId
+            // }
+            // 咨询转发团队：{
+            //     counsel:data.results,
+            //     type:'card',
+            //     patientId:patientId,
+            //     doctorId:DoctorId,
+            //     //转发信息
+            //     targetId:teamId,
+            //     fromId:doctorId,
+            //     //consultation info
+            //     consultationId:
+            // }
+            // 名片{
+            //     type:'contact',
+            //     doctorInfo:{},
+            //     //转发信息
+            //     fromId:
+            //     targetId:
+            // }
+            //显示通知栏消息
             document.addEventListener('jmessage.onReceiveCustomMessage', function(msg) {
-                console.log('[jmessage.onReceiveCustomMessage]: ' + msg);
+                console.info('[jmessage.onReceiveCustomMessage]:' );
+                console.log(msg);
+                var counsel=JSON.parse(msg.content.contentStringMap.counsel);
                 // $rootScope.$broadcast('receiveMessage',msg);
-                if (msg.targetType == 'single' && msg.fromID != $rootScope.conversation.id) {
-                    if (device.platform == "Android") {
-                        window.plugins.jPushPlugin.addLocalNotification(1, '本地推送内容test', msg.content.contentStringMap.type, 111, 0, null)
-                            // message = window.JMessage.message;
-                            // console.log(JSON.stringify(message));
-                    } else {
-                        window.plugins.jPushPlugin.addLocalNotificationForIOS(0, msg.content.contentStringMap.type + '本地推送内容test', 1, 111, null)
+                if (msg.targetType == 'single' && msg.fromName != $rootScope.conversation.id) {
+                    if(msg.content.contentStringMap.doctorId==msg.content.contentStringMap.targetId) prefix='[咨询]';
+                    else prefix='[咨询转发]';
+                    if(msg.content.contentStringMap.type=='card'){
+                        if (device.platform == "Android") {
+                            window.plugins.jPushPlugin.addLocalNotification(1, prefix+counsel.help, msg.targetName, msg.serverMessageId, 0, msg);
+                        } else {
+                            window.plugins.jPushPlugin.addLocalNotificationForIOS(0, prefix+counsel.help, 1, msg.serverMessageId, msg);
+                        }
+                    }else if(msg.content.contentStringMap.type=='contact'){
+
+                    }
+                    
+                }
+                if (msg.targetType == 'group' && msg.targetID != $rootScope.conversation.id) {
+                    if(msg.content.contentStringMap.type=='card'){
+                        if (device.platform == "Android") {
+                                window.plugins.jPushPlugin.addLocalNotification(1, '[团队咨询]', msg.fromNickname, msg.serverMessageId, 0, msg);
+                        } else {
+                            window.plugins.jPushPlugin.addLocalNotificationForIOS(0, '[团队咨询]', 1, msg.serverMessageId, msg);
+                        }
+                    }else if(msg.content.contentStringMap.type=='contact'){
                     }
                 }
 
             }, false);
-
         }
+
+        //聊天用，防止消息被keyboard遮挡
         window.addEventListener('native.keyboardshow', function(e) {
             $rootScope.$broadcast('keyboardshow', e.keyboardHeight);
         });
@@ -116,6 +228,13 @@ angular.module('kidney',[
         templateUrl: 'partials/others/signin.html',
         controller: 'SignInCtrl'
     })
+    .state('agreement', {
+      cache: false,
+      url: '/agreeOrNot',
+      params:{last:null},
+      templateUrl: 'partials/others/agreement.html',
+      controller: 'AgreeCtrl'
+    })   
     .state('phonevalid', {
         url: '/phonevalid',
         cache: false,
@@ -193,10 +312,11 @@ angular.module('kidney',[
         }
     })
 
-    //tuandui
+    //交流
     .state('tab.groups', {
         // cache: false,
-        url: '/groups/:type',
+        //type:   '0'=team  '1'=doctor
+        url: '/groups/type/:type',
         views: {
             'tab-groups':{
                 controller: 'groupsCtrl',
@@ -207,7 +327,7 @@ angular.module('kidney',[
 
     //"我"页面
     .state('tab.me', {
-        // cache: false,
+        cache: false,
         url: '/me',
         views: {
             'tab-me':{
@@ -262,7 +382,8 @@ angular.module('kidney',[
                 controller: 'selectDocCtrl',
                 templateUrl: 'partials/consult/select-doctor.html'
             }
-        }
+        },
+        params:{msg:null}
     })
     .state('tab.selectTeam', {
         // cache: false,
@@ -272,7 +393,8 @@ angular.module('kidney',[
                 controller: 'selectTeamCtrl',
                 templateUrl: 'partials/consult/select-team.html'
             }
-        }
+        },
+        params:{msg:null}
     })
     //已完成
     .state('tab.did', {
@@ -331,6 +453,17 @@ angular.module('kidney',[
         }
     })
 
+    // .state('tab.HealthInfo', {
+    //     // cache: false,
+    //     url: '/HealthInfo',
+    //     views: {
+    //         'tab-patient':{
+    //             controller: 'HealthInfoCtrl',
+    //             templateUrl: 'partials/patient/HealthInfo.html'
+    //         }
+    //     }
+    // })    
+
     // views-tab-groups
     .state('tab.new-group', {
         url: '/newgroup',
@@ -342,7 +475,7 @@ angular.module('kidney',[
         }
     })
     .state('tab.groups-search', {
-        url: '/groups/search',
+        url: '/groupsearch',
         views: {
             'tab-groups': {
                 templateUrl: 'partials/group/groups-search.html',
@@ -351,7 +484,7 @@ angular.module('kidney',[
         }
     })
     .state('tab.group-add', {
-            url: '/groups/add/:groupId',
+            url: '/groups/add/:teamId',
             views: {
                 'tab-groups': {
                     templateUrl: 'partials/group/group-add.html',
@@ -359,63 +492,93 @@ angular.module('kidney',[
                 }
             }
         })
+    .state('tab.group-kick', {
+            url: '/groups/kick',
+            views: {
+                'tab-groups': {
+                    templateUrl: 'partials/group/group-kick.html',
+                    controller: 'GroupKickCtrl'
+                }
+            },
+            params:{teamId:null}
+        })
     .state('tab.group-add-member', {
-            url: '/groups/addmember/:groupId',
+            //type : 'new'表示从新建组进来的，不是'new'就是已有team加成员
+            url: '/groups/addmember/:type',
             views: {
                 'tab-groups': {
                     templateUrl: 'partials/group/group-add-member.html',
                     controller: 'GroupAddMemberCtrl'
                 }
-            }
+            },
+            params:{teamId:null}
         })
     .state('tab.group-detail', {
-            url: '/groups/:groupId',
+            url: '/groups/detail',
             views: {
                 'tab-groups': {
                     templateUrl: 'partials/group/group-detail.html',
                     controller: 'GroupDetailCtrl'
                 }
-            }
+            },
+            params:{teamId:null}
         })
     .state('tab.group-qrcode', {
-            url: '/groups/qrcode/:groupId',
+            url: '/groups/qrcode',
             views: {
                 'tab-groups': {
                     templateUrl: 'partials/group/group-qrcode.html',
                     controller: 'GroupQrcodeCtrl'
                 }
-            }
+            },
+            params:{teamId:null}
         })
     .state('tab.group-chat', {
         //'0':团队交流  '1': 未结束病历  '2':已结束病历
-            url: '/groups/chat/:type/:teamId/:groupId',
+            url: '/groups/chat',
             views: {
                 'tab-groups': {
                     templateUrl: 'partials/group/group-chat.html',
                     controller: 'GroupChatCtrl'
-                }
-            }
-
+                    // params:{'group':null,'type':'0','groupId':null}
+                },
+                // params:['group','typr','groupId']
+            },
+            params:{'type':'0','teamId':null,'groupId':null}
+            // params:['group','typr','groupId']
         })
     .state('tab.group-conclusion', {
-            url: '/groups/conclusion/:type/:teamId/:groupId',
+            url: '/groups/conclusion',
             views: {
                 'tab-groups': {
                     templateUrl: 'partials/group/conclusion.html',
                     controller: 'GroupConclusionCtrl'
                 }
-            }
-
+            },
+            params:{consultationId:null,teamId:null}
         })
     .state('tab.group-patient', {
         // cache: false,
-        url: '/group/:teamId/patients',
+        url: '/group/patients',
         views: {
             'tab-groups':{
                 controller: 'groupPatientCtrl',
                 templateUrl: 'partials/group/group-patient.html'
             }
-        }
+        },
+        params:{teamId:null}
+    })
+    //医生个人信息
+    .state('tab.group-profile', {
+        // cache: false,
+        url: '/group/doctor/profile',
+        views: {
+            'tab-groups':{
+                controller: 'doctorProfileCtrl',
+                templateUrl: 'partials/group/profile.html'
+            }
+        },
+        params:{memberId:null}
     })
 
     // views-tab-me
@@ -528,4 +691,10 @@ angular.module('kidney',[
         $state.go('tab.groups', {type:'0'});
       },20);
     }
+    $scope.goPatient = function(){
+        setTimeout(function() {
+        $state.go('tab.patient', {});
+      },20);
+    }
+
 }])

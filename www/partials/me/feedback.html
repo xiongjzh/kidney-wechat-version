@@ -3,7 +3,7 @@
 <!--       <ion-nav-buttons side="left">
             <a class="button button-icon icon ion-chevron-left" href="#/tab/me"></a>
       </ion-nav-buttons> -->
-      <ion-nav-bar class="bar-positive nav-title-slide-ios7">
+      <ion-nav-bar class="bar-positive nav-title-slide-ios7" align-title="center">
           <ion-nav-back-button class="button-clear">
             <i class="ion-chevron-left"></i>
         </ion-nav-back-button>
@@ -18,9 +18,9 @@
         </ion-item>
         <div class="list">
 			<a class="item item-thumbnail-left" ng-repeat="fb in feedbacks">
-				<img src="img/default_user.png">
-                <h2>{{fb.patient}}</h2>
-                <p class="friend-detail-p">评分：{{fb.score}}</p>
+				<img ng-src="fb.photoUrl">
+                <h2>{{fb.patientId.name}}</h2>
+                <p class="friend-detail-p">评分：{{fb.totalScore}}</p>
                 <p class="friend-detail-p">{{fb.content}}</p>
 				<p class="friend-detail-p">评论时间：{{fb.time}}</p>
 

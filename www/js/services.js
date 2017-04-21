@@ -18,6 +18,7 @@ angular.module('kidney.services', ['ionic','ngResource'])
   };
 }])
 .constant('CONFIG', {
+    crossKey:'fe7b9ba069b80316653274e4',
     appKey: 'cf32b94444c4eaacef86903e',
     baseUrl: 'http://121.43.107.106:4050/',
     cameraOptions: {
@@ -95,52 +96,6 @@ angular.module('kidney.services', ['ionic','ngResource'])
   //return service;
 })
 
-//我
-.factory("meFactory",function(){
-  var service={};
-  // var flag=false;
-  // var userid;//用户ID
-  // if(Storage.get('userid')!=null){
-    // userid=Storage.get('userid');
-  // }; 
-  service.GetDoctorInfo=function(uid){
-      var  result;//待返回json
-      var doctors=[
-      {
-        photoUrl:"max.png",
-        userId:"D201703240001",
-        name:"小丁",
-        gender:"男",
-        title:"主任医生",
-        workUnit:"浙江XXX医院",
-        department:"泌尿科",
-        major:"肾上腺分泌失调",
-        Numberroduction:"从医多年"
-          },
-      {
-        photoUrl:"ben.png",
-        userId:"D201703240002",
-        name:"小李",
-        gender:"女",
-        title:"主任医生",
-        workUnit:"浙江XXX医院",
-        department:"泌尿科2",
-        major:"慢性肾炎、肾小管疾病",
-        Numberroduction:"从医十年"
-          }
-      ];
-      for(var i=0;i<doctors.length;i++){
-        var doctor=doctors[i];
-        if(doctors[i].userId==uid)
-        {
-          result=doctor;
-          break;
-        }
-      }
-      return result;
-  }
-  return service;
-})
 //media文件操作 XJZ
 .factory('fs',['$q','$cordovaFile','$filter',function($q,$cordovaFile,$filter){
     return {
@@ -205,7 +160,7 @@ angular.module('kidney.services', ['ionic','ngResource'])
                     reject(err);
                 });
             audio.media.startRecord();
-            $ionicLoading.show({ template: 'recording' });
+            $ionicLoading.show({ template: '开始说话',noBackdrop:true});
         });
     }
     audio.stopRec = function() {
@@ -299,110 +254,155 @@ angular.module('kidney.services', ['ionic','ngResource'])
     };
 })
 //jmessage XJZ
-.factory('JM', ['Storage', function(Storage) {
+.factory('JM', ['Storage','$q','Doctor', function(Storage,$q,Doctor) {
     var ConversationList = [];
     var messageLIsts = {};
+    function pGen(u){
+        return md5(u,"kidney").substr(4,10);
+    }
 
     function checkIsLogin() {
-        console.log("checkIsLogin...");
-        window.JMessage.getMyInfo(function(response) {
-            console.log("user is login" + response);
-            var myInfo = JSON.parse(response);
-            window.JMessage.username = myInfo.userName;
-            window.JMessage.nickname = myInfo.nickname;
-            window.JMessage.gender = myInfo.mGender;
-            usernameForConversation = myInfo.userName;
-            // gotoConversation();
-        }, function(response) {
-            console.log("User is not login.");
-            window.JMessage.username = "";
-            window.JMessage.nickname = "";
-            window.JMessage.gender = "unknown";
+        return $q(function(resolve,reject){
+            window.JMessage.getMyInfo(function(response) {
+                console.log("user is login" + response);
+                var myInfo = JSON.parse(response);
+                window.JMessage.username = myInfo.userName;
+                // window.JMessage.nickname = myInfo.nickname;
+                // window.JMessage.gender = myInfo.mGender;
+                // usernameForConversation = myInfo.userName;
+                resolve(myInfo.userName);
+            }, function(response) {
+
+                console.log("User is not login.");
+                window.JMessage.username = "";
+                window.JMessage.nickname = "";
+                window.JMessage.gender = "unknown";
+                reject('not login')
+            });
+        });
+        // console.log("checkIsLogin...");
+        
+    }
+
+    // function getPushRegistrationID() {
+    //     try {
+    //         window.JPush.getRegistrationID(onGetRegistrationID);
+    //         if (device.platform != "Android") {
+    //             window.JPush.setDebugModeFromIos();
+    //             window.JPush.setApplicationIconBadgeNumber(0);
+    //         } else {
+    //             window.JPush.setDebugMode(true);
+    //         }
+    //     } catch (exception) {
+    //         console.log(exception);
+    //     }
+    // }
+
+    // function updateUserInfo() {
+    //     window.JMessage.getMyInfo(
+    //         function(response) {
+    //             var myInfo = JSON.parse(response);
+    //             console.log("user is login" + response);
+    //             window.JMessage.username = myInfo.userName;
+    //             window.JMessage.nickname = myInfo.nickname;
+    //             window.JMessage.gender = myInfo.mGender;
+    //             $('#myInfoUsername').val(myInfo.userName);
+    //             $('#myInfoNickname').val(myInfo.nickname);
+    //             $('#myInfoGender').val(myInfo.gender);
+    //         }, null);
+    // }
+
+    // function getUserDisplayName() {
+    //     if (window.JMessage.nickname.length == 0) {
+    //         return window.JMessage.username;
+    //     } else {
+    //         return window.JMessage.nickname;
+    //     }
+    // }
+
+    function login(user,nick) {
+        return $q(function(resolve,reject){
+            Doctor.getDoctorInfo({userId:user})
+            .then(function(data){
+                console.log(user);
+                console.log(pGen(user));
+                if(window.JMessage){
+                    window.JMessage.login(user, pGen(user),
+                        function(response) {
+                            window.JMessage.updateMyInfo('nickname',data.results.name);
+                            window.JMessage.nickname = data.results.name;
+                            window.JMessage.username = user;
+                            resolve(user);
+                        }, function(err){
+                            console.log(err);
+                            register(user,data.results.name);
+                            // reject(err);
+                        });
+
+
+                }
+            },function(err){
+                reject(err);
+            })            
         });
     }
 
-    function getPushRegistrationID() {
-        try {
-            window.JPush.getRegistrationID(onGetRegistrationID);
-            if (device.platform != "Android") {
-                window.JPush.setDebugModeFromIos();
-                window.JPush.setApplicationIconBadgeNumber(0);
-            } else {
-                window.JPush.setDebugMode(true);
-            }
-        } catch (exception) {
-            console.log(exception);
-        }
+    function register(user,nick) {
+        return $q(function(resolve,reject){
+            window.JMessage.register(user, pGen(user),
+                function(response) {
+                    window.JMessage.login(user, pGen(user),
+                    function(response) {
+                        //真实姓名
+                        window.JMessage.updateMyInfo('nickname',nick);
+                        window.JMessage.username = user;
+                        window.JMessage.nickname = nick;
+                        resolve(user);
+                    }, function(err){
+                        console.log(err);
+                        reject(err);
+                    });
+                    // console.log("login callback success" + response);
+                    // resolve(user);
+                },
+                function(response) {
+                    console.log("login callback fail" + response);
+                    reject(response)
+                }
+            );
+        });
+        
     }
+    // nickname：昵称。
+    // birthday：生日。
+    // signature：个性签名。
+    // gender：性别。
+    // region：地区。
+    // function updateMyInfo(field,value){
+    //     window.JMessage.updateMyInfo(field,value,null,null)
+    // }
+    // function updateConversationList() {
+    //     $('#conversationList').empty().listview('refresh');
+    //     console.log("updateConversationList");
+    //     window.JMessage.getConversationList(
+    //         function(response) {
+    //             conversationList = JSON.parse(response);
+    //         },
+    //         function(response) {
+    //             alert("Get conversation list failed.");
+    //             console.log(response);
+    //         });
+    // }
 
-    function updateUserInfo() {
-        window.JMessage.getMyInfo(
-            function(response) {
-                var myInfo = JSON.parse(response);
-                console.log("user is login" + response);
-                window.JMessage.username = myInfo.userName;
-                window.JMessage.nickname = myInfo.nickname;
-                window.JMessage.gender = myInfo.mGender;
-                $('#myInfoUsername').val(myInfo.userName);
-                $('#myInfoNickname').val(myInfo.nickname);
-                $('#myInfoGender').val(myInfo.gender);
-            }, null);
-    }
-
-    function getUserDisplayName() {
-        if (window.JMessage.nickname.length == 0) {
-            return window.JMessage.username;
-        } else {
-            return window.JMessage.nickname;
-        }
-    }
-
-    function login() {
-        var username = $("#loginUsername").val();
-        var password = $("#loginPassword").val();
-        window.JMessage.login(username, password,
-            function(response) {
-                window.JMessage.username = username;
-                alert("login ok");
-                gotoConversation();
-            }, null);
-    }
-
-    function register(userID, passwd) {
-        window.JMessage.register(userID, passwd,
-            function(response) {
-                console.log("login callback success" + response);
-                alert("register ok");
-            },
-            function(response) {
-                console.log("login callback fail" + response);
-                alert(response);
-            }
-        );
-    }
-
-    function updateConversationList() {
-        $('#conversationList').empty().listview('refresh');
-        console.log("updateConversationList");
-        window.JMessage.getConversationList(
-            function(response) {
-                conversationList = JSON.parse(response);
-            },
-            function(response) {
-                alert("Get conversation list failed.");
-                console.log(response);
-            });
-    }
-
-    function onReceiveMessage(message) {
-        console.log("onReceiveSingleMessage");
-        if (device.platform == "Android") {
-            message = window.JMessage.message;
-            console.log(JSON.stringify(message));
-        }
-        // messageArray.unshift(message);
-        //refreshConversation();
-    }
+    // function onReceiveMessage(message) {
+    //     console.log("onReceiveSingleMessage");
+    //     if (device.platform == "Android") {
+    //         message = window.JMessage.message;
+    //         console.log(JSON.stringify(message));
+    //     }
+    //     // messageArray.unshift(message);
+    //     //refreshConversation();
+    // }
     // function getMessageHistory(username) {
     //     $('#messageList').empty().listview('refresh');
     //     //读取的是从 0 开始的 50 条聊天记录，可按实现需求传不同的值。
@@ -495,44 +495,138 @@ angular.module('kidney.services', ['ionic','ngResource'])
         }
     }
 
-    function onSetTagsWithAlias(event) {
-        try {
-            console.log("onSetTagsWithAlias");
-            var result = "result code:" + event.resultCode + " ";
-            result += "tags:" + event.tags + " ";
-            result += "alias:" + event.alias + " ";
-            $("#tagAliasResult").html(result);
-        } catch (exception) {
-            console.log(exception)
-        }
+    // function onSetTagsWithAlias(event) {
+    //     try {
+    //         console.log("onSetTagsWithAlias");
+    //         var result = "result code:" + event.resultCode + " ";
+    //         result += "tags:" + event.tags + " ";
+    //         result += "alias:" + event.alias + " ";
+    //         $("#tagAliasResult").html(result);
+    //     } catch (exception) {
+    //         console.log(exception)
+    //     }
+    // }
+
+    // function setTagWithAlias() {
+    //     try {
+    //         var username = $("#loginUsername").val();
+    //         var tag1 = $("#tagText1").val();
+    //         var tag2 = $("#tagText2").val();
+    //         var tag3 = $("#tagText3").val();
+    //         var alias = $("#aliasText").val();
+    //         var dd = [];
+    //         if (tag1 != "") {
+    //             dd.push(tag1);
+    //         }
+    //         if (tag2 != "") {
+    //             dd.push(tag2);
+    //         }
+    //         if (tag3 != "") {
+    //             dd.push(tag3);
+    //         }
+    //         window.JPush.setTagsWithAlias(dd, alias);
+    //     } catch (exception) {
+    //         console.log(exception);
+    //     }
+    // }
+    function newGroup(name,des,members,type){
+        return $q(function(resolve,reject){
+            window.JMessage.createGroup('abcde','fg','',
+            // window.JMessage.createGroup(name,des,
+                function(data){
+                    console.log(data);
+                    // members=$rootScope.newMember;
+                    var idStr=[];
+                    for(var i in members) idStr.push(members[i].userId);
+                    idStr.join(',');
+                    // window.JMessage.addGroupMembers(groupId,idStr,
+                    window.JMessage.addGroupMembers('22818577','user004,',
+                        function(data){
+                            console.log(data);
+                            upload();
+                        },function(err){
+                            $ionicLoading.show({ template: '失败addGroupMembers', duration: 1500 });
+                            console.log(err);
+                        })
+                },function(err){
+                    $ionicLoading.show({ template: '失败createGroup', duration: 1500 });
+                    console.log(err);
+                })
+        })
     }
 
-    function setTagWithAlias() {
-        try {
-            var username = $("#loginUsername").val();
-            var tag1 = $("#tagText1").val();
-            var tag2 = $("#tagText2").val();
-            var tag3 = $("#tagText3").val();
-            var alias = $("#aliasText").val();
-            var dd = [];
-            if (tag1 != "") {
-                dd.push(tag1);
+    function sendCustom(type,toUser,key,data){
+        return $q(function(resolve,reject){
+            if(type='single'){
+                window.JMessage.sendSingleCustomMessage(toUser,data,key,
+                    function(data){
+                        resolve(data);
+                    },function(err){
+                        reject(err);
+                    });
+            }else if(type='group'){
+                window.JMessage.sendGroupCustomMessage(toUser,data,key,
+                    function(data){
+                        resolve(data);
+                    },function(err){
+                        reject(err);
+                    });
+            }else{
+                reject('wrong type')
             }
-            if (tag2 != "") {
-                dd.push(tag2);
+        })
+    }
+    function sendContact(type,toUser,data){
+        return $q(function(resolve,reject){
+            if(type='single'){
+                window.JMessage.sendSingleCustomMessage(toUser,data,key,
+                    function(data){
+                        resolve(data);
+                    },function(err){
+                        reject(err);
+                    });
+            }else if(type='group'){
+                window.JMessage.sendGroupCustomMessage(toUser,data,key,
+                    function(data){
+                        resolve(data);
+                    },function(err){
+                        reject(err);
+                    });
+            }else{
+                reject('wrong type')
             }
-            if (tag3 != "") {
-                dd.push(tag3);
+        })
+    }
+    function sendEndl(type,toUser,data){
+        return $q(function(resolve,reject){
+            if(type='single'){
+                window.JMessage.sendSingleCustomMessage(toUser,data,key,
+                    function(data){
+                        resolve(data);
+                    },function(err){
+                        reject(err);
+                    });
+            }else if(type='group'){
+                window.JMessage.sendGroupCustomMessage(toUser,data,key,
+                    function(data){
+                        resolve(data);
+                    },function(err){
+                        reject(err);
+                    });
+            }else{
+                reject('wrong type')
             }
-            window.JPush.setTagsWithAlias(dd, alias);
-        } catch (exception) {
-            console.log(exception);
-        }
+        })
     }
     return {
         init: function() {
             window.JPush.init();
-            checkIsLogin();
+            // checkIsLogin()
+            // .then(function(data){
+
+            // },function(err){
+            //     if(Storage.get('UID')) login(Storage.get('UID'));
+            // })
             getPushRegistrationID();
             // document.addEventListener("jmessage.onReceiveMessage", onReceiveMessage, false);
             // document.addEventListener("deviceready", onDeviceReady, false);
@@ -545,29 +639,14 @@ angular.module('kidney.services', ['ionic','ngResource'])
             // document.addEventListener("jpush.receiveMessage",
             //     onReceivePushMessage, false);
         },
+        login:login,
+        pGen:pGen,
+        sendCustom:sendCustom,
+        newGroup:newGroup,
         register: register,
+        pGen:pGen,
         checkIsLogin: checkIsLogin,
         getPushRegistrationID: getPushRegistrationID,
-        updateUserInfo: function() {
-            window.JMessage.getMyInfo(
-                function(response) {
-                    var myInfo = JSON.parse(response);
-                    console.log("user is login" + response);
-                    window.JMessage.username = myInfo.userName;
-                    window.JMessage.nickname = myInfo.nickname;
-                    window.JMessage.gender = myInfo.mGender;
-                    $('#myInfoUsername').val(myInfo.userName);
-                    $('#myInfoNickname').val(myInfo.nickname);
-                    $('#myInfoGender').val(myInfo.gender);
-                }, null);
-        },
-        getUserDisplayName: function() {
-            if (window.JMessage.nickname.length == 0) {
-                return window.JMessage.username;
-            } else {
-                return window.JMessage.nickname;
-            }
-        }
     }
 }])
 //获取图片，拍照or相册，见CONFIG.cameraOptions。return promise。xjz
@@ -602,6 +681,35 @@ angular.module('kidney.services', ['ionic','ngResource'])
     var serve={};
     var abort = $q.defer();
 
+    var Dict = function(){
+        return $resource(CONFIG.baseUrl + ':path/:route',{path:'dict'},{
+            getDiseaseType:{method:'GET', params:{route: 'typeTWO'}, timeout: 100000},
+            getDistrict:{method:'GET', params:{route: 'district'}, timeout: 100000},
+            getHospital:{method:'GET', params:{route: 'hospital'}, timeout: 100000},
+            typeOne:{method:'GET', params:{route: 'typeOne'}, timeout: 100000}
+        });
+    };
+
+    var Task1 = function(){
+        return $resource(CONFIG.baseUrl + ':path',{path:'tasks'},{
+            getTask:{method:'GET', params:{}, timeout: 100000}
+        });
+    };
+
+    var Task2 = function(){
+        return $resource(CONFIG.baseUrl + ':path/:route',{path:'tasks'},{
+            changeTaskstatus:{method:'GET', params:{route: 'status'}, timeout: 100000},
+            changeTasktime:{method:'GET', params:{route: 'time'}, timeout: 100000}
+        });
+    };
+
+    var Compliance = function(){
+        return $resource(CONFIG.baseUrl + ':path',{path:'compliance'},{
+            postcompliance:{method:'POST', params:{}, timeout: 100000},
+            getcompliance:{method:'GET', params:{}, timeout: 100000}
+        });
+    };
+
     var Counsel = function(){
         return $resource(CONFIG.baseUrl + ':path/:route',{path:'counsel'},{
             getCounsel:{method:'GET', params:{route: 'getCounsels'}, timeout: 100000},
@@ -623,7 +731,45 @@ angular.module('kidney.services', ['ionic','ngResource'])
 
     var Doctor =function(){
         return $resource(CONFIG.baseUrl + ':path/:route',{path:'doctor'},{
-            postDocBasic:{method:'POST', params:{route: 'postDocBasic'}, timeout: 100000}
+            postDocBasic:{method:'POST', params:{route: 'postDocBasic'}, timeout: 100000},
+            getPatientList:{method:'GET', params:{route: 'getPatientList'}, timeout: 100000},
+            getDoctorInfo:{method:'GET', params:{route: 'getDoctorInfo'}, timeout: 100000},
+            getMyGroupList:{method:'GET', params:{route: 'getMyGroupList'}, timeout: 100000},
+            getGroupPatientList:{method:'GET', params:{route: 'getGroupPatientList'}, timeout: 100000},
+            getRecentDoctorList:{method:'GET', params:{route: 'getRecentDoctorList'}, timeout: 100000},
+            editDoctorDetail:{method:'POST',params:{route:'editDoctorDetail'},timeout:10000},
+            insertSchedule:{method:'POST',params:{route:'insertSchedule'},timeout:10000},
+            getSchedules:{method:'GET',params:{route:'getSchedules'},timeout:10000},
+            deleteSchedule:{method:'POST',params:{route:'deleteSchedule'},timeout:10000},
+            getSuspendTime:{method:'GET',params:{route:'getSuspendTime'},timeout:10000},
+            insertSuspendTime:{method:'POST',params:{route:'insertSuspendTime'},timeout:10000},
+            deleteSuspendTime:{method:'POST',params:{route:'deleteSuspendTime'},timeout:10000},
+            getPatientByDate:{method:'GET',params:{route:'getPatientByDate'},timeout:10000}
+        });
+    }
+
+    var User = function(){
+        return $resource(CONFIG.baseUrl + ':path/:route',{path:'user'},{
+            register:{method:'POST', params:{route: 'register',phoneNo:'@phoneNo',password:'@password',role:'@role'}, timeout: 100000},
+            changePassword:{method:'POST', params:{route: 'reset',phoneNo:'@phoneNo',password:'@password'}, timeout: 100000},
+            logIn:{method:'POST', params:{route: 'login'}, timeout: 100000},
+            logOut:{method:'POST', params:{route: 'logout',userId:'@userId'}, timeout: 100000},
+            getUserId:{method:'GET', params:{route: 'getUserID',phoneNo:'@phoneNo'}, timeout: 100000},
+            sendSMS:{method:'POST', params:{route: 'sendSMS',mobile:'@mobile',smsType:'@smsType'}, timeout: 100000},//第一次验证码发送成功返回结果为”User doesn't exist“，如果再次发送才返回”验证码成功发送“
+            verifySMS:{method:'GET', params:{route: 'verifySMS',mobile:'@mobile',smsType:'@smsType',smsCode:'@smsCode'}, timeout: 100000},
+            getAgree:{method:'GET', params:{route: 'getUserAgreement',userId:'@userId'}, timeout: 100000},
+            updateAgree:{method:'POST', params:{route: 'updateUserAgreement'}, timeout: 100000}
+        });
+    }
+
+    var Health = function(){
+        return $resource(CONFIG.baseUrl + ':path/:route',{path:'healthInfo'},{
+            createHealth:{method:'POST', params:{route: 'insertHealthInfo',userId:'@userId',type:'@type',time:'@time',url:'@url',label:'@label',description:'@description',comments:'@comments'}, timeout: 100000},
+            modifyHealth:{method:'POST', params:{route:'modifyHealthDetail',userId:'@userId',type:'@type',time:'@time',url:'@url',label:'@label',description:'@description',comments:'@comments',insertTime:'@insertTime'},timeout:100000},
+            getHealthDetail:{method:'GET', params:{route:'getHealthDetail',userId:'@userId',insertTime:'@insertTime'},timeout:100000},
+            getAllHealths:{method:'GET', params:{route:'getAllHealthInfo',userId:'@userId'},timeout:100000},
+            deleteHealth:{method:'POST', params:{route:'deleteHealthDetail',userId:'@userId',insertTime:'@insertTime'},timeout:100000}
+
         });
     }
 
@@ -656,7 +802,18 @@ angular.module('kidney.services', ['ionic','ngResource'])
             getCounselReport:{method:'GET', params:{route: 'getCounselReport'}, timeout: 100000},
             getTeam:{method:'GET', params:{route: 'getTeam'}, timeout: 100000},
             insertMember:{method:'POST', params:{route: 'insertMember'}, timeout: 100000},
-            removeMember:{method:'POST', params:{route: 'removeMember'}, timeout: 100000}
+            newConsultation:{method:'POST', params:{route: 'newConsultation'}, timeout: 100000},
+            newTeam:{method:'POST', params:{route: 'newTeam'}, timeout: 100000},
+            removeMember:{method:'POST', params:{route: 'removeMember'}, timeout: 100000},
+            updateLastTalkTime:{method:'POST', params:{route: 'updateLastTalkTime'}, timeout: 100000}
+        });
+    }
+
+
+    var Insurance =function(){
+        return $resource(CONFIG.baseUrl + ':path/:route',{path:'insurance'},{
+            getInsMsg:{method:'GET', params:{route: 'getInsMsg'}, timeout: 100000},
+            updateInsuranceMsg:{method:'POST', params:{route: 'updateInsuranceMsg'}, timeout: 100000}
         });
     }
 
@@ -664,29 +821,229 @@ angular.module('kidney.services', ['ionic','ngResource'])
         abort.resolve();
         $interval(function () {
             abort = $q.defer();
+            serve.Dict = Dict();
+            serve.Task1 = Task1();
+            serve.Task2 = Task2();
+            serve.Compliance = Compliance();
             serve.Counsel = Counsel();
             serve.Patient = Patient();
             serve.Doctor = Doctor();
+            serve.Health = Health();
             serve.Comment = Comment();
             serve.VitalSign = VitalSign();
             serve.Account = Account();
             serve.Message = Message();
             serve.Communication = Communication();
+            serve.User = User();
+            serve.Insurance = Insurance();
         }, 0, 1);
     };
+    serve.Dict = Dict();
+    serve.Task1 = Task1();
+    serve.Task2 = Task2();
+    serve.Compliance = Compliance();
     serve.Counsel = Counsel();
     serve.Patient = Patient();
     serve.Doctor = Doctor();
+    serve.Health = Health();
     serve.Comment = Comment();
     serve.VitalSign = VitalSign();
     serve.Account = Account();
     serve.Message = Message();
     serve.Communication = Communication();
+    serve.User = User();
+    serve.Insurance = Insurance();    
     return serve;
 }])
-
-.factory('Communication', ['$q', 'Data', function($q, Data){
+.factory('Dict', ['$q', 'Data', function($q, Data){
     var self = this;
+    //params->{
+            //  category:'patient_class'
+           // }
+    self.getDiseaseType = function(params){
+        var deferred = $q.defer();
+        Data.Dict.getDiseaseType(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->{
+            //  level:'3',//1获取省份，2获取城市，3获取区县
+            //  province:"33", //定位到某个具体省份时需要输入
+            //  city:'01',  //定位到某个具体城市时需要输入
+            //  district:'02' //定位到某个具体区县时需要输入
+           // }
+    self.getDistrict = function(params){
+        var deferred = $q.defer();
+        Data.Dict.getDistrict(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->{
+            //  locationCode:'330103',//输入全部为空时获取全部医院信息，需要定位到某个具体地区时需要输入locationCode，定位到某个具体医院时需要输入hospitalCode
+            //  hostipalCode:"001"
+           // }
+    self.getHospital = function(params){
+        var deferred = $q.defer();
+        Data.Dict.getHospital(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->{
+    //    category:'MessageType'
+    //}
+    self.typeOne = function(params){
+        var deferred = $q.defer();
+        Data.Dict.typeOne(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    return self;
+}])
+.factory('Task', ['$q', 'Data', function($q, Data){
+    var self = this;
+    //params->{
+            //  userId:'U201704050002',//usderId="Admin"，sortNo为空时获取系统全部任务模板，sortNo="1"时获取指定任务模板，userId为用户ID时获取指定用户的任务信息
+            //  sortNo:'1'
+           // }
+    self.getTask = function(params){
+        var deferred = $q.defer();
+        Data.Task1.getTask(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->{
+            //  userId:'U201704050002',//unique
+            //  sortNo:1,
+            //  type:'Measure',
+            //  code:'BloodPressure',
+            //  status:'0'
+           // }
+    self.changeTaskstatus = function(params){
+        var deferred = $q.defer();
+        Data.Task2.changeTaskstatus(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->{
+            //  userId:'U201704050002',//unique
+            //  sortNo:1,
+            //  type:'Measure',
+            //  code:'BloodPressure',
+            //  startTime:'2017-12-12'
+           // }
+    self.changeTasktime = function(params){
+        var deferred = $q.defer();
+        Data.Task2.changeTasktime(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    return self;
+}])
+.factory('Compliance', ['$q', 'Data', function($q, Data){
+    var self = this;
+    //params->{
+            // "userId": "U201704050002",
+            // "type": "Measure",
+            // "code": "Weight",
+            // "date": "2017-12-13",
+            // "status": 0,
+            // "description": ""
+           // }
+    self.postcompliance = function(params){
+        var deferred = $q.defer();
+        Data.Compliance.postcompliance(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->{
+            //  userId:'U201704050002',//date为空时获取指定用户的全部任务执行记录，date不为空时获取指定用户某一天的任务执行记录
+            //  date:'2017-12-13'
+           // }
+    self.getcompliance = function(params){
+        var deferred = $q.defer();
+        Data.Compliance.getcompliance(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    return self;
+}])
+.factory('Communication', ['$q', 'Data','Storage', function($q, Data,Storage){
+    var self = this;
+    //params->0:{
+            //      teamId:'teampost2',
+            //      name:'id1',
+            //      sponsorId:'id'
+            //      sponsorName:'DOCname'
+            //      description:''
+            //  }
+    self.newTeam = function(params){
+        var deferred = $q.defer();
+        Data.Communication.newTeam(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
     //params->0:{counselId:'counsel01'}
     self.getCounselReport = function(params){
         var deferred = $q.defer();
@@ -749,12 +1106,313 @@ angular.module('kidney.services', ['ionic','ngResource'])
         });
         return deferred.promise;
     };
+    // {
+    //     teamId,
+    //     counselId,
+    //     sponsorId,
+    //     patientId,
+    //     consultationId,
+    //     status:'1'-进行中,'0'-已结束
+    // }
+    self.newConsultation = function(params){
+        var deferred = $q.defer();
+        Data.Communication.newConsultation(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    // {
+    //     "doctorId":"doc01", 
+    //     "doctorId2":"doc03", 
+    //     "lastTalkTime":"2017-04-09T10:00:00"
+    // }
+    self.updateLastTalkTime = function(id2,millis){
+        var params={
+            "doctorId":Storage.get('UID'), 
+            "doctorId2":id2, 
+            "lastTalkTime":(new Date(millis)).toISOString().substr(0,19)
+        }
+        var deferred = $q.defer();
+        Data.Communication.updateLastTalkTime(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    
 
+    return self;
+}])
+.factory('User', ['$q', 'Data', function($q, Data){
+    var self = this;
+    //params->{
+        // phoneNo:"18768113669",
+        // password:"123456",
+        // role:"patient"
+        //}
+        //000
+    self.register = function(params){
+        var deferred = $q.defer();
+        Data.User.register(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+    //params->{
+        // phoneNo:"18768113669",
+        // password:"123",
+        //}
+        //001
+    self.changePassword = function(params){
+        var deferred = $q.defer();
+        Data.User.changePassword(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+    //params->{userId:"U201702070041"}
+    //036
+    self.getAgree = function(params){
+        var deferred = $q.defer();
+        Data.User.getAgree(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+
+    
+    //params->{userId:"U201702070041",agreement:"0"}
+    //037
+    self.updateAgree = function(params){
+        var deferred = $q.defer();
+        Data.User.updateAgree(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+
+    //params->{
+        // username:"18768113669",
+        // password:"123456",
+        // role:"patient"
+        //}
+        //002
+    self.logIn = function(params){
+        var deferred = $q.defer();
+        Data.User.logIn(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+
+
+    //params->{userId:"U201704010002"}
+    //003
+    self.logOut = function(params){
+        var deferred = $q.defer();
+        Data.User.logOut(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+
+    //params->{phoneNo:"18768113668"}
+    //004
+    self.getUserId = function(params){
+        var deferred = $q.defer();
+        Data.User.getUserId(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+
+    //params->{
+        //mobile:"18768113660",
+        //smsType:1}
+    //005
+    self.sendSMS = function(params){
+        var deferred = $q.defer();
+        Data.User.sendSMS(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+
+    //params->{
+        //mobile:"18868186038",
+        //smsType:1
+        //smsCode:234523}
+    //006
+    self.verifySMS = function(params){
+        var deferred = $q.defer();
+        Data.User.verifySMS(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+
+
+    
+    return self;
+}])
+
+.factory('Health', ['$q', 'Data', function($q, Data){
+    var self = this;
+    //params->{
+            //  userId:'U201704010003',//unique
+            //  type:1,
+            //  time:'2014/02/22 11:03:37',
+            //  url:'c:/wf/img.jpg',
+            //  label:'abc',
+            //  description:'wf',
+            //  comments:''
+           // }
+    self.createHealth = function(params){
+        var deferred = $q.defer();
+        Data.Health.createHealth(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->{
+        // userId:"U201704010003",
+        //}
+        //011
+    self.getAllHealths = function(params){
+        var deferred = $q.defer();
+        Data.Health.getAllHealths(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+    //params->{
+        // userId:"U201704010003",
+        // insertTime:"2017-04-11T05:43:36.965Z",
+        //}
+        //012
+    self.getHealthDetail = function(params){
+        var deferred = $q.defer();
+        Data.Health.getHealthDetail(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+    //params->{
+        // userId:"U201704010003",
+        // insertTime:"2017-04-11T05:43:36.965Z",
+        // type:3,
+        // time:"2014/02/22",
+        // url:"c:/wf/img.jpg",
+        // description:"修改晕厥入院，在医院住了3天，双侧颈动脉无异常搏动，双侧颈静脉怒张，肝颈静脉回流征阳性，气管居中，甲状腺不肿大，未触及结节无压痛、震颤，上下均为闻及血管杂音。",
+        // }
+        //014
+    self.modifyHealth = function(params){
+    var deferred = $q.defer();
+        Data.Health.modifyHealth(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
+
+    //params->{
+        // userId:"U201704010003",
+        // insertTime:"2017-04-11T05:43:36.965Z",
+        //}
+        //015
+    self. deleteHealth = function(params){
+        var deferred = $q.defer();
+        Data.Health. deleteHealth(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    }
     return self;
 }])
 .factory('Message', ['$q', 'Data', function($q, Data){
     var self = this;
-    //params->0:{type:1}
+    //params->0:{
+    //    userId:'U201704120001',
+    //    type:1//option
+    //}
     self.getMessages = function(params){
         var deferred = $q.defer();
         Data.Message.getMessages(
@@ -985,6 +1643,239 @@ angular.module('kidney.services', ['ionic','ngResource'])
         });
         return deferred.promise;
     };
+
+    //params->0:{
+       //   userId:'doc01'
+       // }
+    self.getPatientList = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getPatientList(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    //params->0:{
+       //   userId:'doc01'
+       // }
+    self.getRecentDoctorList = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getRecentDoctorList(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    
+    //params->0:{
+           //   userId:'doc01'
+           // }
+    self.getDoctorInfo = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getDoctorInfo(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->0:{
+           //   userId:'doc01'
+           // }
+    self.getMyGroupList = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getMyGroupList(
+            params,
+            function(data, headers){
+
+                deferred.resolve(data.results);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    //params->0:{
+           //   userId:'doc01'
+           // }
+    self.getRecentDoctorList = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getRecentDoctorList(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+
+
+    //params->0:{
+           //   teamId:'team1',
+           //   status:1
+           // }
+    self.getGroupPatientList = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getGroupPatientList(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    self.editDoctorDetail = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.editDoctorDetail(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    //params->0:{
+           //   userId:'doc01',
+           //   day:0,//0-6->周一，周二...周日
+           //   time:0//0->上午 1->下午
+           // }
+    self.insertSchedule = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.insertSchedule(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    //params->0:{
+           //   userId:'doc01'
+           // }
+    self.getSchedules = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getSchedules(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    //params->0:{
+           //   userId:'doc01',
+           //   day:0,//0-6->周一，周二...周日
+           //   time:0//0->上午 1->下午
+           // }
+    self.deleteSchedule = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.deleteSchedule(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    //params->0:{
+    //   userId:'doc01'
+    // }
+    self.getSuspendTime = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getSuspendTime(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    //params->0:{
+           //   userId:'doc01',
+           //   start:new Date(),
+           //   end:new Date(),
+           // }
+    self.insertSuspendTime = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.insertSuspendTime(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    
+    //params->0:{
+           //   userId:'doc01',
+           //   start:new Date(),
+           //   end:new Date(),
+           // }
+    self.deleteSuspendTime = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.deleteSuspendTime(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+
+    //params->0:{
+           //   userId:'doc01',
+           // }
+    self.getPatientByDate = function(params){
+        var deferred = $q.defer();
+        Data.Doctor.getPatientByDate(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+  
     return self;
 }])
 .factory('Counsel', ['$q', 'Data', function($q, Data){
@@ -1028,6 +1919,46 @@ angular.module('kidney.services', ['ionic','ngResource'])
     };
     return self;
 }])
+
+.factory('Insurance', ['$q', 'Data', function($q, Data){
+    var self = this;
+    // //params->0:{
+    //                 doctorId:'doc01',
+    //                 patientId:'p01'
+    //             }
+    self.getInsMsg = function(params){
+        var deferred = $q.defer();
+        Data.Insurance.getInsMsg(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    //params->0:{
+                    // doctorId:'doc01', 
+                    // patientId:'p02', 
+                    // insuranceId:'ins01',                    
+                    // type:5, 
+    //          }
+    self.updateInsuranceMsg = function(params){
+        var deferred = $q.defer();
+        Data.Insurance.updateInsuranceMsg(
+            params,
+            function(data, headers){
+                deferred.resolve(data);
+            },
+            function(err){
+                deferred.reject(err);
+        });
+        return deferred.promise;
+    };
+    return self;
+}])
+
 .factory('QRScan', ['$cordovaBarcodeScanner', '$ionicLoading', '$q', function($cordovaBarcodeScanner, $ionicLoading, $q) {
     return {
         getCode: function() {
@@ -1040,6 +1971,7 @@ angular.module('kidney.services', ['ionic','ngResource'])
                     // "Format: " + data.format + "<br/>" +
                     // "Cancelled: " + data.cancelled;
                     if (data.cancelled != true) {
+                        //返回code
                         resolve(data.text);
                     } else {
                         $ionicLoading.show({ template: '请重试', duration: 1500 });
@@ -1053,4 +1985,22 @@ angular.module('kidney.services', ['ionic','ngResource'])
         }
     }
 
-}]);
+}])
+.factory('arrTool',function(){
+    return {
+        indexOf:function(arr,key,val,binary){
+            if(binary){
+                //已排序，二分,用于消息
+                // var first=0,last=arr.length,mid=(first+last)/2;
+                // while(arr[mid][key]!=val){
+                //     if(arr[mid])
+                // }
+            }else{
+                for(var i=0, len=arr.length;i<len;i++){
+                    if(arr[i][key]==val) return i;
+                }
+                return -1;
+            }
+        }
+    }
+})
